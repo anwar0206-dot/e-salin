@@ -4,113 +4,105 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>e-Salin</title>
+<title>e-Salin Scanner</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-body {
-    font-family: Arial, sans-serif;
-    background: #f4f7fb;
-    margin: 0;
-    padding: 20px;
-    text-align: center;
-}
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        margin: 0;
+        padding: 20px;
+        text-align: center;
+    }
 
-.container {
-    max-width: 500px;
-    margin: auto;
-    background: white;
-    padding: 25px;
-    border-radius: 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
+    .container {
+        max-width: 600px;
+        margin: auto;
+        background: white;
+        padding: 25px;
+        border-radius: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
 
-h1 {
-    margin-bottom: 5px;
-    color: #222;
-}
+    h1 {
+        margin-bottom: 5px;
+    }
 
-.subtitle {
-    color: #666;
-    margin-bottom: 25px;
-}
+    .subtitle {
+        color: #666;
+        margin-bottom: 25px;
+    }
 
-button {
-    width: 100%;
-    padding: 16px;
-    margin: 8px 0;
-    border: none;
-    border-radius: 12px;
-    font-size: 17px;
-    font-weight: bold;
-    cursor: pointer;
-}
+    button,
+    label {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 15px;
+        margin: 10px 0;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        cursor: pointer;
+        background: #2563eb;
+        color: white;
+    }
 
-.camera {
-    background: #2563eb;
-    color: white;
-}
+    button:hover,
+    label:hover {
+        opacity: 0.9;
+    }
 
-.gallery {
-    background: #e5e7eb;
-    color: #222;
-}
+    #gallery {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 20px;
+    }
 
-.pdf {
-    background: #16a34a;
-    color: white;
-}
+    .page {
+        position: relative;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        overflow: hidden;
+        background: #fafafa;
+    }
 
-.clear {
-    background: #dc2626;
-    color: white;
-}
+    .page img {
+        width: 100%;
+        display: block;
+    }
 
-input {
-    display: none;
-}
+    .delete {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        width: auto;
+        padding: 7px 10px;
+        margin: 0;
+        background: #dc2626;
+        border-radius: 8px;
+    }
 
-#preview {
-    margin-top: 20px;
-}
+    #generate {
+        background: #16a34a;
+        margin-top: 25px;
+    }
 
-.page {
-    position: relative;
-    margin-bottom: 15px;
-}
+    #clear {
+        background: #dc2626;
+    }
 
-.page img {
-    width: 100%;
-    border-radius: 10px;
-    border: 1px solid #ddd;
-}
+    input[type="file"] {
+        display: none;
+    }
 
-.page-number {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    background: rgba(0,0,0,0.7);
-    color: white;
-    padding: 5px 9px;
-    border-radius: 8px;
-    font-size: 13px;
-}
-
-.delete {
-    margin-top: 5px;
-    background: #ef4444;
-    color: white;
-    padding: 8px 15px;
-    width: auto;
-    font-size: 14px;
-}
-
-.info {
-    margin-top: 20px;
-    font-size: 14px;
-    color: #666;
-}
+    #status {
+        margin-top: 15px;
+        color: #555;
+    }
 </style>
 </head>
 
@@ -121,14 +113,12 @@ input {
     <h1>📄 e-Salin</h1>
 
     <div class="subtitle">
-        Scan tulisan dan simpan sebagai PDF
+        Handwriting → PDF
     </div>
 
     <!-- CAMERA -->
     <label for="camera">
-        <div class="button camera">
-            📷 SCAN DOKUMEN
-        </div>
+        📷 Ambil Gambar
     </label>
 
     <input
@@ -139,123 +129,134 @@ input {
     >
 
     <!-- GALLERY -->
-    <label for="gallery">
-        <div class="button gallery">
-            🖼️ PILIH DARI GALERI
-        </div>
+    <label for="galleryInput">
+        🖼️ Pilih Dari Galeri
     </label>
 
     <input
         type="file"
-        id="gallery"
+        id="galleryInput"
         accept="image/*"
         multiple
     >
 
-    <!-- PREVIEW -->
-    <div id="preview"></div>
+    <!-- IMAGE PREVIEW -->
+    <div id="gallery"></div>
 
-    <!-- PDF -->
-    <button class="pdf" onclick="generatePDF()">
-        📄 JANA & DOWNLOAD PDF
+    <div id="status">
+        Belum ada halaman.
+    </div>
+
+    <!-- GENERATE PDF -->
+    <button id="generate">
+        📄 JANA PDF
     </button>
 
     <!-- CLEAR -->
-    <button class="clear" onclick="clearAll()">
+    <button id="clear">
         🗑️ PADAM SEMUA
     </button>
-
-    <div class="info">
-        e-Salin membantu pelajar menukar gambar nota atau tulisan tangan kepada fail PDF.
-    </div>
 
 </div>
 
 <script>
 
+const { jsPDF } = window.jspdf;
+
 let pages = [];
 
+// ===============================
 // CAMERA
+// ===============================
+
 document.getElementById("camera").addEventListener("change", function(e) {
 
-    const files = e.target.files;
+    const file = e.target.files[0];
 
-    if (!files.length) return;
-
-    addFiles(files);
-
-    this.value = "";
-
-});
-
-// GALLERY
-document.getElementById("gallery").addEventListener("change", function(e) {
-
-    const files = e.target.files;
-
-    if (!files.length) return;
-
-    addFiles(files);
-
-    this.value = "";
-
-});
-
-// ADD FILES
-function addFiles(files) {
-
-    for (let file of files) {
-
-        if (!file.type.startsWith("image/")) continue;
-
-        const reader = new FileReader();
-
-        reader.onload = function(e) {
-
-            pages.push(e.target.result);
-
-            displayPages();
-
-        };
-
-        reader.readAsDataURL(file);
+    if (file) {
+        addImage(file);
     }
+
+    e.target.value = "";
+});
+
+
+// ===============================
+// GALLERY
+// ===============================
+
+document.getElementById("galleryInput").addEventListener("change", function(e) {
+
+    const files = Array.from(e.target.files);
+
+    files.forEach(file => {
+        addImage(file);
+    });
+
+    e.target.value = "";
+});
+
+
+// ===============================
+// ADD IMAGE
+// ===============================
+
+function addImage(file) {
+
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+
+        pages.push(e.target.result);
+
+        displayPages();
+
+    };
+
+    reader.readAsDataURL(file);
 }
 
+
+// ===============================
 // DISPLAY
+// ===============================
+
 function displayPages() {
 
-    const preview = document.getElementById("preview");
+    const gallery = document.getElementById("gallery");
 
-    preview.innerHTML = "";
+    gallery.innerHTML = "";
 
-    pages.forEach((src, index) => {
+    pages.forEach((image, index) => {
 
         const div = document.createElement("div");
 
         div.className = "page";
 
         div.innerHTML = `
-            <div class="page-number">
-                Page ${index + 1}
-            </div>
-
-            <img src="${src}">
-
+            <img src="${image}">
             <button
                 class="delete"
                 onclick="deletePage(${index})">
-                Padam
+                ✕
             </button>
         `;
 
-        preview.appendChild(div);
+        gallery.appendChild(div);
 
     });
 
+    document.getElementById("status").innerText =
+        pages.length === 0
+        ? "Belum ada halaman."
+        : pages.length + " halaman telah ditambah.";
 }
 
-// DELETE
+
+// ===============================
+// DELETE PAGE
+// ===============================
+
 function deletePage(index) {
 
     pages.splice(index, 1);
@@ -264,26 +265,38 @@ function deletePage(index) {
 
 }
 
-// CLEAR
-function clearAll() {
 
-    pages = [];
+// ===============================
+// CLEAR ALL
+// ===============================
 
-    displayPages();
+document.getElementById("clear").addEventListener("click", function() {
 
-}
+    if (pages.length === 0) return;
 
+    if (confirm("Padam semua halaman?")) {
+
+        pages = [];
+
+        displayPages();
+
+    }
+
+});
+
+
+// ===============================
 // GENERATE PDF
-async function generatePDF() {
+// ===============================
+
+document.getElementById("generate").addEventListener("click", async function() {
 
     if (pages.length === 0) {
 
-        alert("Sila scan atau pilih gambar dahulu.");
+        alert("Sila ambil atau pilih gambar terlebih dahulu.");
 
         return;
     }
-
-    const { jsPDF } = window.jspdf;
 
     const pdf = new jsPDF("p", "mm", "a4");
 
@@ -293,26 +306,18 @@ async function generatePDF() {
             pdf.addPage();
         }
 
-        const img = new Image();
-
-        img.src = pages[i];
-
-        await new Promise(resolve => {
-
-            img.onload = resolve;
-
-        });
+        const img = await loadImage(pages[i]);
 
         const pageWidth = 210;
         const pageHeight = 297;
 
         const margin = 10;
 
-        let width = img.width;
-        let height = img.height;
-
         const maxWidth = pageWidth - (margin * 2);
         const maxHeight = pageHeight - (margin * 2);
+
+        let width = img.width;
+        let height = img.height;
 
         const ratio = Math.min(
             maxWidth / width,
@@ -336,6 +341,27 @@ async function generatePDF() {
     }
 
     pdf.save("e-Salin.pdf");
+
+});
+
+
+// ===============================
+// LOAD IMAGE
+// ===============================
+
+function loadImage(src) {
+
+    return new Promise((resolve) => {
+
+        const img = new Image();
+
+        img.onload = function() {
+            resolve(img);
+        };
+
+        img.src = src;
+
+    });
 
 }
 
