@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>e-Salin Scanner</title>
+<title>e-Salin - Handwriting OCR</title>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
@@ -14,7 +15,6 @@
         background: #f4f6f8;
         margin: 0;
         padding: 20px;
-        text-align: center;
     }
 
     .container {
@@ -27,16 +27,17 @@
     }
 
     h1 {
+        text-align: center;
         margin-bottom: 5px;
     }
 
     .subtitle {
+        text-align: center;
         color: #666;
         margin-bottom: 25px;
     }
 
-    button,
-    label {
+    label, button {
         display: block;
         width: 100%;
         box-sizing: border-box;
@@ -46,62 +47,59 @@
         border-radius: 12px;
         font-size: 16px;
         cursor: pointer;
+        text-align: center;
+    }
+
+    label {
         background: #2563eb;
         color: white;
     }
 
-    button:hover,
-    label:hover {
-        opacity: 0.9;
-    }
-
-    #gallery {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-        margin-top: 20px;
-    }
-
-    .page {
-        position: relative;
-        border: 1px solid #ddd;
-        border-radius: 10px;
-        overflow: hidden;
-        background: #fafafa;
-    }
-
-    .page img {
-        width: 100%;
-        display: block;
-    }
-
-    .delete {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        width: auto;
-        padding: 7px 10px;
-        margin: 0;
-        background: #dc2626;
-        border-radius: 8px;
-    }
-
-    #generate {
+    button {
         background: #16a34a;
-        margin-top: 25px;
+        color: white;
     }
 
-    #clear {
-        background: #dc2626;
+    button.secondary {
+        background: #7c3aed;
     }
 
     input[type="file"] {
         display: none;
     }
 
-    #status {
+    #preview {
+        width: 100%;
         margin-top: 15px;
+        border-radius: 10px;
+        display: none;
+    }
+
+    textarea {
+        width: 100%;
+        box-sizing: border-box;
+        min-height: 220px;
+        padding: 15px;
+        margin-top: 15px;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        font-size: 16px;
+        resize: vertical;
+    }
+
+    #progress {
+        text-align: center;
+        margin: 15px 0;
         color: #555;
+    }
+
+    .info {
+        background: #eef2ff;
+        padding: 12px;
+        border-radius: 10px;
+        margin-top: 15px;
+        font-size: 14px;
+        color: #444;
     }
 </style>
 </head>
@@ -113,12 +111,11 @@
     <h1>📄 e-Salin</h1>
 
     <div class="subtitle">
-        Handwriting → PDF
+        Handwriting → Digital Text
     </div>
 
-    <!-- CAMERA -->
     <label for="camera">
-        📷 Ambil Gambar
+        📷 Scan Handwriting
     </label>
 
     <input
@@ -128,42 +125,50 @@
         capture="environment"
     >
 
-    <!-- GALLERY -->
-    <label for="galleryInput">
-        🖼️ Pilih Dari Galeri
+    <label for="gallery">
+        🖼️ Pilih Gambar
     </label>
 
     <input
         type="file"
-        id="galleryInput"
+        id="gallery"
         accept="image/*"
-        multiple
     >
 
-    <!-- IMAGE PREVIEW -->
-    <div id="gallery"></div>
+    <img id="preview">
 
-    <div id="status">
-        Belum ada halaman.
+    <div id="progress">
+        Belum ada gambar.
     </div>
 
-    <!-- GENERATE PDF -->
-    <button id="generate">
-        📄 JANA PDF
+    <button id="ocrButton">
+        🔍 BACA TULISAN
     </button>
 
-    <!-- CLEAR -->
-    <button id="clear">
-        🗑️ PADAM SEMUA
+    <textarea
+        id="result"
+        placeholder="Teks yang dibaca akan muncul di sini..."
+    ></textarea>
+
+    <button class="secondary" id="copyButton">
+        📋 COPY TEXT
     </button>
+
+    <button id="pdfButton">
+        📄 SIMPAN SEBAGAI PDF
+    </button>
+
+    <div class="info">
+        💡 Tip: Ambil gambar dengan pencahayaan yang baik dan pastikan tulisan jelas.
+    </div>
 
 </div>
 
+
 <script>
 
-const { jsPDF } = window.jspdf;
+let selectedImage = null;
 
-let pages = [];
 
 // ===============================
 // CAMERA
@@ -174,10 +179,9 @@ document.getElementById("camera").addEventListener("change", function(e) {
     const file = e.target.files[0];
 
     if (file) {
-        addImage(file);
+        loadImage(file);
     }
 
-    e.target.value = "";
 });
 
 
@@ -185,162 +189,13 @@ document.getElementById("camera").addEventListener("change", function(e) {
 // GALLERY
 // ===============================
 
-document.getElementById("galleryInput").addEventListener("change", function(e) {
+document.getElementById("gallery").addEventListener("change", function(e) {
 
-    const files = Array.from(e.target.files);
+    const file = e.target.files[0];
 
-    files.forEach(file => {
-        addImage(file);
-    });
-
-    e.target.value = "";
-});
-
-
-// ===============================
-// ADD IMAGE
-// ===============================
-
-function addImage(file) {
-
-    const reader = new FileReader();
-
-    reader.onload = function(e) {
-
-        pages.push(e.target.result);
-
-        displayPages();
-
-    };
-
-    reader.readAsDataURL(file);
-}
-
-
-// ===============================
-// DISPLAY
-// ===============================
-
-function displayPages() {
-
-    const gallery = document.getElementById("gallery");
-
-    gallery.innerHTML = "";
-
-    pages.forEach((image, index) => {
-
-        const div = document.createElement("div");
-
-        div.className = "page";
-
-        div.innerHTML = `
-            <img src="${image}">
-            <button
-                class="delete"
-                onclick="deletePage(${index})">
-                ✕
-            </button>
-        `;
-
-        gallery.appendChild(div);
-
-    });
-
-    document.getElementById("status").innerText =
-        pages.length === 0
-        ? "Belum ada halaman."
-        : pages.length + " halaman telah ditambah.";
-}
-
-
-// ===============================
-// DELETE PAGE
-// ===============================
-
-function deletePage(index) {
-
-    pages.splice(index, 1);
-
-    displayPages();
-
-}
-
-
-// ===============================
-// CLEAR ALL
-// ===============================
-
-document.getElementById("clear").addEventListener("click", function() {
-
-    if (pages.length === 0) return;
-
-    if (confirm("Padam semua halaman?")) {
-
-        pages = [];
-
-        displayPages();
-
+    if (file) {
+        loadImage(file);
     }
-
-});
-
-
-// ===============================
-// GENERATE PDF
-// ===============================
-
-document.getElementById("generate").addEventListener("click", async function() {
-
-    if (pages.length === 0) {
-
-        alert("Sila ambil atau pilih gambar terlebih dahulu.");
-
-        return;
-    }
-
-    const pdf = new jsPDF("p", "mm", "a4");
-
-    for (let i = 0; i < pages.length; i++) {
-
-        if (i > 0) {
-            pdf.addPage();
-        }
-
-        const img = await loadImage(pages[i]);
-
-        const pageWidth = 210;
-        const pageHeight = 297;
-
-        const margin = 10;
-
-        const maxWidth = pageWidth - (margin * 2);
-        const maxHeight = pageHeight - (margin * 2);
-
-        let width = img.width;
-        let height = img.height;
-
-        const ratio = Math.min(
-            maxWidth / width,
-            maxHeight / height
-        );
-
-        width *= ratio;
-        height *= ratio;
-
-        const x = (pageWidth - width) / 2;
-        const y = (pageHeight - height) / 2;
-
-        pdf.addImage(
-            img,
-            "JPEG",
-            x,
-            y,
-            width,
-            height
-        );
-    }
-
-    pdf.save("e-Salin.pdf");
 
 });
 
@@ -349,21 +204,161 @@ document.getElementById("generate").addEventListener("click", async function() {
 // LOAD IMAGE
 // ===============================
 
-function loadImage(src) {
+function loadImage(file) {
 
-    return new Promise((resolve) => {
+    const reader = new FileReader();
 
-        const img = new Image();
+    reader.onload = function(e) {
 
-        img.onload = function() {
-            resolve(img);
-        };
+        selectedImage = e.target.result;
 
-        img.src = src;
+        const preview = document.getElementById("preview");
+
+        preview.src = selectedImage;
+
+        preview.style.display = "block";
+
+        document.getElementById("progress").innerText =
+            "Gambar berjaya dimuatkan. Tekan BACA TULISAN.";
+
+        document.getElementById("result").value = "";
+
+    };
+
+    reader.readAsDataURL(file);
+
+}
+
+
+// ===============================
+// OCR
+// ===============================
+
+document.getElementById("ocrButton").addEventListener("click", async function() {
+
+    if (!selectedImage) {
+
+        alert("Sila ambil atau pilih gambar dahulu.");
+
+        return;
+    }
+
+    const progress = document.getElementById("progress");
+
+    const result = document.getElementById("result");
+
+    progress.innerText = "🔍 Sedang membaca tulisan...";
+
+    result.value = "";
+
+    try {
+
+        const output = await Tesseract.recognize(
+            selectedImage,
+            "eng",
+            {
+                logger: function(info) {
+
+                    if (info.status === "recognizing text") {
+
+                        const percent =
+                            Math.round(info.progress * 100);
+
+                        progress.innerText =
+                            "🔍 Membaca tulisan... " +
+                            percent + "%";
+                    }
+
+                }
+            }
+        );
+
+        result.value = output.data.text;
+
+        progress.innerText =
+            "✅ Selesai! Semak dan edit teks jika perlu.";
+
+    }
+
+    catch(error) {
+
+        console.error(error);
+
+        progress.innerText =
+            "❌ OCR gagal. Cuba gambar yang lebih jelas.";
+
+    }
+
+});
+
+
+// ===============================
+// COPY TEXT
+// ===============================
+
+document.getElementById("copyButton").addEventListener("click", async function() {
+
+    const text = document.getElementById("result").value;
+
+    if (!text.trim()) {
+
+        alert("Tiada teks untuk disalin.");
+
+        return;
+    }
+
+    await navigator.clipboard.writeText(text);
+
+    alert("Teks telah disalin!");
+
+});
+
+
+// ===============================
+// TEXT TO PDF
+// ===============================
+
+document.getElementById("pdfButton").addEventListener("click", function() {
+
+    const text =
+        document.getElementById("result").value;
+
+    if (!text.trim()) {
+
+        alert("Tiada teks untuk dijadikan PDF.");
+
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+
+    const pdf = new jsPDF();
+
+    const lines = pdf.splitTextToSize(
+        text,
+        180
+    );
+
+    let y = 20;
+
+    lines.forEach(function(line) {
+
+        if (y > 280) {
+
+            pdf.addPage();
+
+            y = 20;
+        }
+
+        pdf.text(line, 15, y);
+
+        y += 8;
 
     });
 
-}
+    pdf.save("e-Salin-Text.pdf");
+
+});
 
 </script>
 
